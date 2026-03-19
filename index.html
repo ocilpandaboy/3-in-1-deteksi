@@ -2,181 +2,322 @@
 <html lang="id">
 <head>
 <meta charset="UTF-8">
-<title>Bahasa Isyarat AI</title>
-
+<title>Website 3 Fitur 🚀</title>
 <style>
+html, body {
+  margin:0; padding:0; width:100%; height:100%; overflow:hidden;
+  font-family:Arial; background:#000; color:#fff;
+}
+
 body {
-  font-family: Arial;
-  text-align: center;
-  background: #e3f2fd;
+  background: url('https://g.top4top.io/s_3730xihx71.jpg') no-repeat center center fixed;
+  background-size: cover;
 }
 
-h2 {
-  margin-top: 10px;
+#menu {
+  position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+  text-align:center; z-index:20;
 }
 
-video, canvas {
-  border-radius: 12px;
-  margin-top: 10px;
+button.feature-btn {
+  display:block; margin:12px auto; padding:12px 28px;
+  font-size:1.5em; border-radius:10px; border:none; background:#1e90ff;
+  color:#fff; cursor:pointer; width:200px;
 }
 
-#chatBox {
-  width: 90%;
-  max-width: 400px;
-  height: 150px;
-  margin: 10px auto;
-  border: 1px solid #ccc;
-  overflow-y: auto;
-  background: white;
-  padding: 10px;
-  border-radius: 10px;
+#video, #canvas {
+  position:absolute; top:0; left:0; width:100%; height:100%;
+  object-fit:cover; display:none;
+  z-index:5;
 }
 
-button {
-  padding: 10px;
-  border: none;
-  background: #2196f3;
-  color: white;
-  border-radius: 8px;
-  margin: 5px;
-  cursor: pointer;
+#status {
+  position:absolute; top:60px; width:100%; text-align:center;
+  font-size:2.2em; font-weight:bold; color:red; text-shadow:2px 2px 5px #000;
+  z-index:10;
 }
 
-button:hover {
-  background: #1976d2;
+#footer {
+  position:absolute; bottom:10px; width:100%; text-align:center;
+  font-size:1em; color:rgba(200,200,200,0.7); z-index:20;
+}
+
+.social-link {
+  color:#1e90ff; /* teks biru */
+  text-decoration: underline #1e90ff; /* garis biru */
+  font-weight:bold;
+}
+
+#back-btn {
+  position:absolute; bottom:60px; left:50%; transform:translateX(-50%);
+  padding:10px 20px; font-size:1.3em; border-radius:8px;
+  border:none; background:#ff6347; color:#fff; cursor:pointer;
+  display:none; z-index:20;
 }
 </style>
 </head>
-
 <body>
 
-<h2>Bahasa Isyarat AI 🤟</h2>
+<div id="menu">
+  <button class="feature-btn" onclick="selectFeature('ngantuk')">Deteksi Ngantuk 👀</button>
+  <button class="feature-btn" onclick="selectFeature('gigi')">Deteksi Warna Gigi 🦷</button>
+  <button class="feature-btn" onclick="selectFeature('benda')">Deteksi Benda Sekitar 📦</button>
+</div>
 
-<button onclick="startCamera()">▶️ Nyalakan Kamera</button>
+<button id="back-btn" onclick="backToMenu()">Kembali ➡️</button>
 
-<br>
+<div id="status">Pilih Fitur</div>
+<video id="video" autoplay playsinline></video>
+<canvas id="canvas"></canvas>
 
-<video id="video" width="300" height="220" autoplay playsinline></video>
-<canvas id="canvas" width="300" height="220"></canvas>
+<div id="footer">
+  © OCIL<br>
+  <a href="https://www.youtube.com/@ocilpandaboy" target="_blank" class="social-link">YouTube</a><br>
+  <a href="https://www.tiktok.com/@ocilpandaboy" target="_blank" class="social-link">Tiktok</a><br>
+  <a href="https://www.instagram.com/ocilpandaboy" target="_blank" class="social-link">Instagram</a>
+</div>
 
-<h3 id="hasil">Klik tombol untuk mulai</h3>
-
-<div id="chatBox"></div>
-
-<button onclick="bicara()">🔊 Bacakan</button>
-<button onclick="clearChat()">🗑️ Hapus</button>
-
-<!-- MediaPipe -->
-<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<!-- Libraries -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.12.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd"></script>
 
 <script>
-const video = document.getElementById('video');
-const canvas = document.getElementById('canvas');
-const ctx = canvas.getContext('2d');
-const hasil = document.getElementById('hasil');
-const chatBox = document.getElementById('chatBox');
+// --------------------
+// Elemen & variabel
+// --------------------
+const video=document.getElementById('video');
+const canvas=document.getElementById('canvas');
+const ctx=canvas.getContext('2d');
+const status=document.getElementById('status');
+const menu=document.getElementById('menu');
+const backBtn=document.getElementById('back-btn');
 
-let kalimat = "";
-let lastHuruf = "";
-let camera = null;
+let camera=null;
+let ttsInterval=null;
+let daruratTimeout=null;
+let feature=null;
+const EAR_HISTORY=[];
+const MAX_HISTORY=30;
+let objectModel=null;
+let lastSpokenObjects=new Set();
+let stateNgantuk="normal";
 
-// START KAMERA (FIX UTAMA)
-function startCamera() {
-  navigator.mediaDevices.getUserMedia({ video: true })
-  .then(stream => {
-    video.srcObject = stream;
-    hasil.innerText = "Kamera aktif 📸";
-
-    startAI(); // jalanin AI setelah kamera hidup
-  })
-  .catch(err => {
-    hasil.innerText = "❌ Kamera gagal: " + err;
-    alert("Izinkan kamera di pengaturan!");
-  });
+// --------------------
+// Start kamera
+// --------------------
+async function startCamera(facingMode){
+  if(camera) camera.stop();
+  video.style.display='block';
+  canvas.style.display='block';
+  menu.style.display='none';
+  backBtn.style.display='block';
+  const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facingMode}});
+  video.srcObject=stream;
+  video.onloadedmetadata=()=>{
+    canvas.width=video.videoWidth;
+    canvas.height=video.videoHeight;
+    if(feature==='ngantuk') startNgantuk();
+    if(feature==='gigi') startGigi();
+    if(feature==='benda') startBenda();
+  };
 }
 
-// Setup MediaPipe
-const hands = new Hands({
-  locateFile: (file) => {
-    return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
-  }
-});
-
-hands.setOptions({
-  maxNumHands: 1,
-  minDetectionConfidence: 0.7,
-  minTrackingConfidence: 0.7
-});
-
-// DETEKSI SEDERHANA
-function deteksiHuruf(landmarks) {
-  const thumb = landmarks[4];
-  const index = landmarks[8];
-  const middle = landmarks[12];
-
-  if (thumb.y > index.y && thumb.y > middle.y) {
-    return "A";
-  } else if (index.y < middle.y) {
-    return "B";
-  } else {
-    return "C";
-  }
+// --------------------
+// Pilih fitur
+// --------------------
+function selectFeature(f){
+  feature=f;
+  stopTTS();
+  EAR_HISTORY.length=0;
+  status.innerText="Loading...";
+  if(f==='ngantuk' || f==='gigi') startCamera('user');
+  if(f==='benda') startCamera({exact:'environment'});
 }
 
-// HASIL DETEKSI
-hands.onResults(results => {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+// --------------------
+// Kembali ke menu
+// --------------------
+function backToMenu(){
+  stopTTS();
+  if(camera){ camera.stop(); camera=null; }
+  video.style.display='none';
+  canvas.style.display='none';
+  menu.style.display='block';
+  backBtn.style.display='none';
+  status.innerText="Pilih Fitur";
+  stateNgantuk="normal";
+}
 
-  if (results.multiHandLandmarks.length > 0) {
-    const landmarks = results.multiHandLandmarks[0];
-    let huruf = deteksiHuruf(landmarks);
+// --------------------
+// Fungsi TTS umum
+// --------------------
+function stopTTS(){
+  if(ttsInterval){ clearInterval(ttsInterval); ttsInterval=null;}
+  speechSynthesis.cancel();
+  if(daruratTimeout){ clearTimeout(daruratTimeout); daruratTimeout=null;}
+}
 
-    hasil.innerText = "Huruf: " + huruf;
+// --------------------
+// Deteksi Ngantuk
+// --------------------
+const faceMesh=new FaceMesh({locateFile:file=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
+faceMesh.setOptions({maxNumFaces:1,minDetectionConfidence:0.7,minTrackingConfidence:0.7});
+faceMesh.onResults(onResultsNgantuk);
 
-    if (huruf !== lastHuruf) {
-      lastHuruf = huruf;
-      kalimat += huruf;
-      updateChat();
+function hitungEAR(landmarks){
+  const kiri=[33,159,133,145,153,154];
+  const kanan=[362,386,263,374,380,381];
+  function ear(mata){
+    const a=Math.hypot(landmarks[mata[1]].x-landmarks[mata[5]].x,landmarks[mata[1]].y-landmarks[mata[5]].y);
+    const b=Math.hypot(landmarks[mata[2]].x-landmarks[mata[4]].x,landmarks[mata[2]].y-landmarks[mata[4]].y);
+    const c=Math.hypot(landmarks[mata[0]].x-landmarks[mata[3]].x,landmarks[mata[0]].y-landmarks[mata[3]].y);
+    return (a+b)/(2*c);
+  }
+  return (ear(kiri)+ear(kanan))/2;
+}
+
+function rollingAverage(arr){
+  if(arr.length===0) return 1.0;
+  return arr.reduce((a,b)=>a+b,0)/arr.length;
+}
+
+function startTTSNgantuk(){
+  if(ttsInterval) return;
+  ttsInterval=setInterval(()=>{
+    const s=new SpeechSynthesisUtterance("Jangan Tidur Anda Sedang Berkendara‼️");
+    s.lang="id-ID";
+    speechSynthesis.speak(s);
+  },3000);
+}
+
+function onResultsNgantuk(results){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(video,0,0,canvas.width,canvas.height);
+
+  if(results.multiFaceLandmarks.length>0){
+    const lm=results.multiFaceLandmarks[0];
+    const ear=hitungEAR(lm);
+    EAR_HISTORY.push(ear);
+    if(EAR_HISTORY.length>MAX_HISTORY) EAR_HISTORY.shift();
+    const avgEAR=rollingAverage(EAR_HISTORY);
+
+    const THRESHOLD_TUTUP=0.30;
+    const THRESHOLD_NGANTUK=0.33;
+
+    if(avgEAR<THRESHOLD_TUTUP){
+      if(stateNgantuk!=="tidur"){
+        stateNgantuk="tidur";
+        status.innerText="Terdeksi Tidur ⚠️";
+        startTTSNgantuk();
+        if(!daruratTimeout){
+          daruratTimeout=setTimeout(()=>{
+            stateNgantuk="darurat";
+            status.innerText="Darurat Kecelakaan ☠️";
+          },60000);
+        }
+      }
+    } else if(avgEAR<THRESHOLD_NGANTUK){
+      if(stateNgantuk!=="ngantuk"){
+        stateNgantuk="ngantuk";
+        status.innerText="Terdeksi Ngantuk‼️";
+        stopTTS();
+        if(daruratTimeout){ clearTimeout(daruratTimeout); daruratTimeout=null;}
+      }
+    } else {
+      if(stateNgantuk!=="normal"){
+        stateNgantuk="normal";
+        status.innerText="Normal ✅";
+        stopTTS();
+      }
     }
   } else {
-    hasil.innerText = "Tidak ada tangan";
+    stateNgantuk="deteksi";
+    status.innerText="Deteksi Mata 👀";
   }
-});
+}
 
-// Jalankan AI
-function startAI() {
-  camera = new Camera(video, {
-    onFrame: async () => {
-      await hands.send({ image: video });
-    },
-    width: 300,
-    height: 220
+function startNgantuk(){
+  const cameraNgantuk=new Camera(video,{onFrame:async()=>{await faceMesh.send({image:video})},width:video.videoWidth,height:video.videoHeight});
+  cameraNgantuk.start();
+}
+
+// --------------------
+// Deteksi Gigi
+// --------------------
+function startGigi(){
+  function detectGigi(){
+    ctx.drawImage(video,0,0,canvas.width,canvas.height);
+    const imgData=ctx.getImageData(0,0,canvas.width,canvas.height);
+    let rTotal=0,gTotal=0,bTotal=0,count=0;
+    for(let i=canvas.width*0.4|0;i<canvas.width*0.6|0;i++){
+      for(let j=canvas.height*0.3|0;j<canvas.height*0.5|0;j++){
+        const idx=(j*canvas.width+i)*4;
+        rTotal+=imgData.data[idx];
+        gTotal+=imgData.data[idx+1];
+        bTotal+=imgData.data[idx+2];
+        count++;
+      }
+    }
+    const r=rTotal/count,g=gTotal/count,b=bTotal/count;
+    const brightness=(r+g+b)/3;
+    let color="Putih";
+    if(brightness<80) color="Hitam";
+    else if(r>200&&g>180&&b>150) color="Kuning";
+
+    status.innerText=`Gigi Anda Berwarna ${color}`;
+    let msg = `Gigi Anda berwarna ${color}`;
+    if(color==="Kuning"||color==="Hitam") msg=`Gigi kamu berwarna ${color}, rajin-rajin sikat gigi yaa`;
+    const s=new SpeechSynthesisUtterance(msg);
+    s.lang="id-ID";
+    speechSynthesis.speak(s);
+
+    requestAnimationFrame(detectGigi);
+  }
+  detectGigi();
+}
+
+// --------------------
+// Deteksi Benda Sekitar + TTS
+// --------------------
+async function loadObjectModel(){
+  status.innerText="Memuat Model Deteksi Benda…";
+  objectModel = await cocoSsd.load();
+  status.innerText = "Model Benda Siap! 📦";
+  detectObjects();
+}
+
+async function detectObjects(){
+  if(!objectModel) return;
+  ctx.drawImage(video,0,0,canvas.width,canvas.height);
+  const predictions = await objectModel.detect(video);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.drawImage(video,0,0,canvas.width,canvas.height);
+
+  let spokenThisFrame = new Set();
+  predictions.forEach(pred=>{
+    const [x,y,w,h] = pred.bbox;
+    ctx.strokeStyle="#00FF00"; ctx.lineWidth=4;
+    ctx.strokeRect(x,y,w,h);
+    ctx.font="18px Arial"; ctx.fillStyle="#00FF00";
+    ctx.fillText(pred.class, x+5, y-10);
+
+    if(!lastSpokenObjects.has(pred.class)){
+      const s=new SpeechSynthesisUtterance(`${pred.class} terdeteksi`);
+      s.lang="id-ID";
+      speechSynthesis.speak(s);
+      spokenThisFrame.add(pred.class);
+    }
   });
-  camera.start();
+
+  lastSpokenObjects = spokenThisFrame;
+  requestAnimationFrame(detectObjects);
 }
 
-// Update chat
-function updateChat() {
-  chatBox.innerText = kalimat;
-}
-
-// Suara
-function bicara() {
-  if (!kalimat) return;
-
-  const speech = new SpeechSynthesisUtterance(kalimat);
-  speech.lang = "id-ID";
-  speechSynthesis.speak(speech);
-}
-
-// Hapus chat
-function clearChat() {
-  kalimat = "";
-  updateChat();
+function startBenda(){
+  loadObjectModel();
 }
 </script>
-
 </body>
 </html>
