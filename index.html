@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <title>Website 3 Fitur 🚀</title>
 <style>
-html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;font-family:Arial;background:#000;color:#fff;}
+html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;font-family:Arial;background:#000;color:#fff;transition:background-color 0.3s;}
 body{background:url('https://g.top4top.io/s_3730xihx71.jpg') no-repeat center center fixed;background-size:cover;}
 #menu{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;z-index:20;}
 #menu-title{font-size:2em;font-weight:bold;margin-bottom:20px;text-shadow:2px 2px 5px #000;}
@@ -26,7 +26,6 @@ button.feature-btn{display:block;margin:15px auto;padding:20px 40px;font-size:1.
 </div>
 
 <button id="back-btn" onclick="backToMenu()">Kembali ➡️</button>
-
 <div id="status"></div>
 <video id="video" autoplay playsinline></video>
 <canvas id="canvas"></canvas>
@@ -44,21 +43,23 @@ button.feature-btn{display:block;margin:15px auto;padding:20px 40px;font-size:1.
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
 
 <script>
-// Elemen & variabel
 const video=document.getElementById('video');
 const canvas=document.getElementById('canvas');
 const ctx=canvas.getContext('2d');
 const status=document.getElementById('status');
 const menu=document.getElementById('menu');
 const backBtn=document.getElementById('back-btn');
+const footer=document.getElementById('footer');
 
-let feature=null, lastText="", cameraStream=null, modelBenda=null;
+let feature=null,lastText="",cameraStream=null,modelBenda=null;
 let lastSpokenObjects=new Set();
+let alarmInterval=null;
 
-// Start kamera
+// Camera
 async function startCamera(facingMode){
   stopAllFeatures();
   video.style.display='block'; canvas.style.display='block'; menu.style.display='none'; backBtn.style.display='block'; status.style.display='block';
+  footer.style.display='none';
   cameraStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:facingMode}});
   video.srcObject=cameraStream;
   video.onloadedmetadata=()=>{
@@ -69,97 +70,86 @@ async function startCamera(facingMode){
   };
 }
 
-// Pilih fitur
 function selectFeature(f){
   feature=f; lastText=""; lastSpokenObjects.clear();
   startCamera(f==='benda'?{exact:'environment'}:'user');
 }
 
-// Kembali ke menu utama
 function backToMenu(){
   stopAllFeatures();
   if(cameraStream){cameraStream.getTracks().forEach(t=>t.stop()); cameraStream=null;}
   video.style.display='none'; canvas.style.display='none';
   menu.style.display='block'; backBtn.style.display='none';
   status.style.display='none'; status.innerText='';
+  footer.style.display='block';
+  stopAlarm();
   feature=null; lastSpokenObjects.clear();
 }
 
-// Stop semua fitur
-function stopAllFeatures(){
-  lastText=""; cancelAnimationFrame(window.featureLoop); speechSynthesis.cancel();
-}
+function stopAllFeatures(){lastText=""; cancelAnimationFrame(window.featureLoop); speechSynthesis.cancel();}
+function speakOnce(text){if(text!==lastText){const utter=new SpeechSynthesisUtterance(text);utter.lang="id-ID";speechSynthesis.speak(utter);lastText=text;}}
+function speakObject(objName){if(!lastSpokenObjects.has(objName)){const utter=new SpeechSynthesisUtterance(objName);utter.lang="id-ID";speechSynthesis.speak(utter);lastSpokenObjects.add(objName);}}
 
-// TTS sekali per teks
-function speakOnce(text){
-  if(text!==lastText){
-    const utter=new SpeechSynthesisUtterance(text); utter.lang="id-ID"; speechSynthesis.speak(utter);
-    lastText=text;
-  }
-}
+// Alarm functions
+function txtAlarm(){if(!alarmInterval){alarmInterval=setInterval(()=>{document.body.style.backgroundColor=document.body.style.backgroundColor==='rgba(255,0,0,0.2)'?'#000':'rgba(255,0,0,0.2)';const utter=new SpeechSynthesisUtterance("Jangan Tidur Anda Sedang Berkendara‼️");utter.lang="id-ID";speechSynthesis.speak(utter);},1500);}}
+function stopAlarm(){if(alarmInterval){clearInterval(alarmInterval);alarmInterval=null;document.body.style.backgroundColor='#000';}}
 
-// TTS untuk benda baru
-function speakObject(objName){
-  if(!lastSpokenObjects.has(objName)){
-    const utter=new SpeechSynthesisUtterance(objName); utter.lang="id-ID"; speechSynthesis.speak(utter);
-    lastSpokenObjects.add(objName);
-  }
-}
-
-// ===== Deteksi Gigi =====
+// Deteksi Gigi
 function startGigi(){
   function detectGigi(){
     ctx.drawImage(video,0,0,canvas.width,canvas.height);
-    status.innerText="Mendeteksi Gigi 🦷";
-    const img=ctx.getImageData(0,0,canvas.width,canvas.height);
+    const startX=canvas.width*0.4|0, startY=canvas.height*0.4|0, endX=canvas.width*0.6|0, endY=canvas.height*0.6|0;
+    const img=ctx.getImageData(startX,startY,endX-startX,endY-startY);
     let rTotal=0,gTotal=0,bTotal=0,count=0;
-    for(let i=canvas.width*0.4|0;i<canvas.width*0.6|0;i++){
-      for(let j=canvas.height*0.3|0;j<canvas.height*0.5|0;j++){
-        const idx=(j*canvas.width+i)*4; rTotal+=img.data[idx]; gTotal+=img.data[idx+1]; bTotal+=img.data[idx+2]; count++;
-      }
-    }
+    for(let i=0;i<img.data.length;i+=4){rTotal+=img.data[i]; gTotal+=img.data[i+1]; bTotal+=img.data[i+2]; count++;}
     if(count>0){
       const r=rTotal/count,g=gTotal/count,b=bTotal/count; const brightness=(r+g+b)/3;
-      let color="Putih"; if(brightness<80)color="Hitam"; else if(r>200&&g>180&&b>150)color="Kuning";
-      const text=`Gigi Anda Berwarna ${color}`; status.innerText=text; speakOnce((color==="Kuning"||color==="Hitam")?`Gigi kamu berwarna ${color}, rajin-rajin sikat gigi yaa`:text);
-    } else {const text="Gigi Tidak Terdeteksi ❌"; status.innerText=text; speakOnce(text);}
+      let color="Putih"; 
+      if(brightness<80)color="Hitam"; else if(r>200&&g>180&&b>150)color="Kuning";
+      let text="Gigi Tidak Terdeteksi ❌";
+      if(brightness>50){text=`Gigi Anda Berwarna ${color}`; speakOnce((color==="Kuning"||color==="Hitam")?`Gigi kamu berwarna ${color}, rajin-rajin sikat gigi yaa`:text);}
+      status.innerText=text;
+    } else {status.innerText="Gigi Tidak Terdeteksi ❌"; speakOnce(status.innerText);}
     window.featureLoop=requestAnimationFrame(detectGigi);
   }
   detectGigi();
 }
 
-// ===== Deteksi Ngantuk =====
+// Deteksi Ngantuk
 async function startNgantuk(){
-  status.innerText="Mendeteksi Mata 👀"; speakOnce(status.innerText);
-  const faceMesh = new FaceMesh({locateFile:(file)=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
-  faceMesh.setOptions({maxNumFaces:1,refineLandmarks:true,minDetectionConfidence:0.5,minTrackingConfidence:0.5});
+  const earHistory=[];
+  const faceMesh=new FaceMesh({locateFile:(file)=>`https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`});
+  faceMesh.setOptions({maxNumFaces:1,refineLandmarks:true,minDetectionConfidence:0.7,minTrackingConfidence:0.7});
   faceMesh.onResults(onResultsNgantuk);
-  const cameraFace = new Camera(video,{onFrame:async()=>{await faceMesh.send({image:video})},width:640,height:480});
+  const cameraFace=new Camera(video,{onFrame:async()=>{await faceMesh.send({image:video})},width:640,height:480});
   cameraFace.start();
 
-  let startClose=null;
+  function calculateEAR(landmarks){
+    const eyeIndices={left:[33,160,158,133,153,144],right:[362,385,387,263,380,373]};
+    function earFor(pts){const a=Math.hypot(landmarks[pts[1]].x-landmarks[pts[5]].x,landmarks[pts[1]].y-landmarks[pts[5]].y);const b=Math.hypot(landmarks[pts[2]].x-landmarks[pts[4]].x,landmarks[pts[2]].y-landmarks[pts[4]].y);const c=Math.hypot(landmarks[pts[0]].x-landmarks[pts[3]].x,landmarks[pts[0]].y-landmarks[pts[3]].y);return(a+b)/(2*c);}
+    return (earFor(eyeIndices.left)+earFor(eyeIndices.right))/2;
+  }
+
   function onResultsNgantuk(results){
     ctx.clearRect(0,0,canvas.width,canvas.height);
     ctx.drawImage(video,0,0,canvas.width,canvas.height);
-    if(results.multiFaceLandmarks && results.multiFaceLandmarks.length>0){
+    if(results.multiFaceLandmarks.length>0){
       const landmarks=results.multiFaceLandmarks[0];
-      // hitung rata-rata tinggi mata (contoh sederhana)
-      const leftEye=(landmarks[159].y-landmarks[145].y);
-      const rightEye=(landmarks[386].y-landmarks[374].y);
-      const eyeOpen=(leftEye+rightEye)/2;
-      let text="";
-      if(eyeOpen>0.03){text="Normal ✅"; startClose=null;} 
-      else if(eyeOpen>0.015){text="Terdeksi Ngantuk‼️"; if(!startClose) startClose=Date.now();}
-      else{text="Terdeksi Tidur ⚠️"; if(!startClose) startClose=Date.now();}
-      speakOnce(text);
-      status.innerText=text;
-      // jika mata tertutup > 60 detik
-      if(startClose && (Date.now()-startClose)>60000){status.innerText="Darurat Kecelakaan ☠️"; speakOnce("Darurat Kecelakaan");}
-    } else {status.innerText="Wajah Tidak Terdeteksi ❌"; speakOnce(status.innerText);}
+      const ear=calculateEAR(landmarks);
+      earHistory.push(ear); if(earHistory.length>20)earHistory.shift();
+      const avgEAR=earHistory.reduce((a,b)=>a+b,0)/earHistory.length;
+      const THRESH_NORMAL=0.30, THRESH_NGANTUK=0.27, THRESH_TIDUR=0.23;
+      let txt="";
+      if(avgEAR>THRESH_NORMAL){txt="Normal ✅"; stopAlarm();}
+      else if(avgEAR>THRESH_NGANTUK){txt="Terdeksi Ngantuk‼️"; stopAlarm();}
+      else if(avgEAR>THRESH_TIDUR){txt="Terdeksi Tidur ⚠️"; txtAlarm();}
+      else{txt="Darurat Kecelakaan ☠️"; txtAlarm();}
+      status.innerText=txt; speakOnce(txt);
+    } else{status.innerText="Wajah Tidak Terdeteksi ❌"; speakOnce(status.innerText); stopAlarm();}
   }
 }
 
-// ===== Deteksi Benda =====
+// Deteksi Benda
 async function startBenda(){
   status.innerText="Mendeteksi Benda 📦"; speakOnce(status.innerText);
   if(!modelBenda) modelBenda=await cocoSsd.load();
