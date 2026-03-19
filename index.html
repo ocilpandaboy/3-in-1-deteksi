@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Bahasa Isyarat AI</title>
+
+<style>
+body {
+  font-family: Arial;
+  text-align: center;
+  background: #e3f2fd;
+}
+
+h2 {
+  margin-top: 10px;
+}
+
+video, canvas {
+  border-radius: 12px;
+  margin-top: 10px;
+}
+
+#chatBox {
+  width: 90%;
+  max-width: 400px;
+  height: 150px;
+  margin: 10px auto;
+  border: 1px solid #ccc;
+  overflow-y: auto;
+  background: white;
+  padding: 10px;
+  border-radius: 10px;
+}
+
+button {
+  padding: 10px;
+  border: none;
+  background: #2196f3;
+  color: white;
+  border-radius: 8px;
+  margin: 5px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #1976d2;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Bahasa Isyarat AI 🤟</h2>
+
+<button onclick="startCamera()">▶️ Nyalakan Kamera</button>
+
+<br>
+
+<video id="video" width="300" height="220" autoplay playsinline></video>
+<canvas id="canvas" width="300" height="220"></canvas>
+
+<h3 id="hasil">Klik tombol untuk mulai</h3>
+
+<div id="chatBox"></div>
+
+<button onclick="bicara()">🔊 Bacakan</button>
+<button onclick="clearChat()">🗑️ Hapus</button>
+
+<!-- MediaPipe -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+
+<script>
+const video = document.getElementById('video');
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const hasil = document.getElementById('hasil');
+const chatBox = document.getElementById('chatBox');
+
+let kalimat = "";
+let lastHuruf = "";
+let camera = null;
+
+// START KAMERA (FIX UTAMA)
+function startCamera() {
+  navigator.mediaDevices.getUserMedia({ video: true })
+  .then(stream => {
+    video.srcObject = stream;
+    hasil.innerText = "Kamera aktif 📸";
+
+    startAI(); // jalanin AI setelah kamera hidup
+  })
+  .catch(err => {
+    hasil.innerText = "❌ Kamera gagal: " + err;
+    alert("Izinkan kamera di pengaturan!");
+  });
+}
+
+// Setup MediaPipe
+const hands = new Hands({
+  locateFile: (file) => {
+    return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+  }
+});
+
+hands.setOptions({
+  maxNumHands: 1,
+  minDetectionConfidence: 0.7,
+  minTrackingConfidence: 0.7
+});
+
+// DETEKSI SEDERHANA
+function deteksiHuruf(landmarks) {
+  const thumb = landmarks[4];
+  const index = landmarks[8];
+  const middle = landmarks[12];
+
+  if (thumb.y > index.y && thumb.y > middle.y) {
+    return "A";
+  } else if (index.y < middle.y) {
+    return "B";
+  } else {
+    return "C";
+  }
+}
+
+// HASIL DETEKSI
+hands.onResults(results => {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+  if (results.multiHandLandmarks.length > 0) {
+    const landmarks = results.multiHandLandmarks[0];
+    let huruf = deteksiHuruf(landmarks);
+
+    hasil.innerText = "Huruf: " + huruf;
+
+    if (huruf !== lastHuruf) {
+      lastHuruf = huruf;
+      kalimat += huruf;
+      updateChat();
+    }
+  } else {
+    hasil.innerText = "Tidak ada tangan";
+  }
+});
+
+// Jalankan AI
+function startAI() {
+  camera = new Camera(video, {
+    onFrame: async () => {
+      await hands.send({ image: video });
+    },
+    width: 300,
+    height: 220
+  });
+  camera.start();
+}
+
+// Update chat
+function updateChat() {
+  chatBox.innerText = kalimat;
+}
+
+// Suara
+function bicara() {
+  if (!kalimat) return;
+
+  const speech = new SpeechSynthesisUtterance(kalimat);
+  speech.lang = "id-ID";
+  speechSynthesis.speak(speech);
+}
+
+// Hapus chat
+function clearChat() {
+  kalimat = "";
+  updateChat();
+}
+</script>
+
+</body>
+</html>
